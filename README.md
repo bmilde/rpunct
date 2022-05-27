@@ -70,6 +70,6 @@ Running `python training/train.py` will replicate the results of this model.
 
 -----------------------------------------------
 ## ☕ Contact 
-Contact [Daulet Nurmanbetov](daulet.nurmanbetov@gmail.com) for questions, feedback and/or requests for similar models.
+This work is based on the awesome work of [Daulet Nurmanbetov](daulet.nurmanbetov@gmail.com)!
 
 -----------------------------------------------
