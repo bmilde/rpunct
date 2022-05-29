@@ -4,40 +4,27 @@
 __author__ = "Daulet N., Robert Geislinger"
 __email__ = "daulet.nurmanbetov@gmail.com, github@crpykng.de"
 
-import os
 import re
 import json
 import random
 import pandas as pd
 
+VALID_LABELS = ['OU', 'OO', '.O', '!O', ',O', '.U', '!U', ',U', ':O', ';O', ':U', "'O", '-O', '?O', '?U']
+
 def create_train_datasets():
-    output_file_names = []
-    # download_df()
     print('start processing')
     for i in 'abcdefghijk':
         i = 'subs_norm1_puncta' + i
-        print(f'{i=}')
-        name = i.split(".")[0]
-        split_nm = name.split("_")[-1]
-        df_name = name.split("_")[0]
+        print(f'actual inputfile: {i}')
         all_records = create_rpunct_dataset(i)
-        output_file_names.append(f"{df_name}_{split_nm}.txt")
-        create_training_samples(all_records, f"{df_name}_{split_nm}")
-    return output_file_names
+        records = create_training_samples(all_records)
+        eval_set = records[-int(len(records) * 0.10):]
+        train_set = records[:int(len(records) * 0.90)]
+        create_text_file(train_set, 'subs_norm1_trainset.txt', append=True)
+        create_text_file(eval_set, 'subs_norm1_evalset.txt', append=True)
 
 
-def download_df(dir_path=''):
-    import tensorflow_datasets as tfds
-    data_type = ['train', 'test']
-    ds = tfds.load('yelp_polarity_reviews', split=data_type, shuffle_files=True)
-    for i in ds:
-        i = tfds.as_dataframe(i)
-        print(i['label'][0])
-        csv_path = os.path.join(dir_path, f'yelp_polarity_reviews_{i["label"][0]}.csv')
-        i.to_csv(csv_path, index=False)
-
-
-def create_record(row):
+def create_record(row, valid_labels):
     """
     Create labels for Punctuation Restoration task for each token.
     """
@@ -59,19 +46,10 @@ def create_record(row):
             new_lab += "U"
         else:
             new_lab += "O"
-
-        new_obs.append({'sentence_id': 0, 'words': text_obs, 'labels': new_lab})
+        if new_lab in valid_labels:
+            new_obs.append({'sentence_id': 0, 'words': text_obs, 'labels': new_lab})
     return new_obs
 
-
-def threadingPart(df):
-    print('start threading')
-    _all_records = []
-    for i in df[0]:
-        records = create_record(i)
-        _all_records.extend(records)
-    print('end threading')
-    return _all_records
 
 def create_rpunct_dataset(orig_data):
     print('create dataset')
@@ -81,24 +59,14 @@ def create_rpunct_dataset(orig_data):
         input=f.read()
     inputA = input.split('\n')
     df = pd.DataFrame(inputA)
-    # chunk_size = int(df.shape[0]/prs)
-    # chunks = [df.iloc[df.index[i:i+chunk_size]] for i in range(0, df.shape[0], chunk_size)]
     all_records = []
     for i in df[0]:
-        records = create_record(i)
+        records = create_record(i, valid_labels=VALID_LABELS)
         all_records.extend(records)
-    
-    # with Pool(prs) as p:
-    #     all_records = p.map(threadingPart, chunks)
-
-    print(f"Dataframe samples: {df.shape}")
-
     return all_records
-    # with open(rpunct_dataset_path, 'w') as fp:
-    #     json.dump(all_records, fp)
 
 
-def create_training_samples(all_records, file_out_nm='train_data', num_splits=5):
+def create_training_samples(all_records):
     """
     Given a looong list of tokens, splits them into 500 token chunks
     thus creating observations. This is for fine-tuning with simpletransformers
@@ -106,37 +74,17 @@ def create_training_samples(all_records, file_out_nm='train_data', num_splits=5)
     """
     print('create training samples')
     random.seed(1337)
-    
-    _round = 0
-    # all_recs = all_records
-    while _round < num_splits:
-        all_recs = all_records
-        observations = []
-        # with open(json_loc_file, 'r') as fp:
-        #     all_records = json.load(fp)
+    observations = []
 
-        size = len(all_recs) // num_splits
-        all_recs = all_recs[size * _round:size * (_round + 1)]
-        splits = create_tokenized_obs(all_recs)
-        full_data = pd.DataFrame(all_recs)
-        del all_recs
+    obs = create_tokenized_obs(all_records)
+    full_data = pd.DataFrame(all_records)
 
-        for i in splits:
-            data_slice = full_data.iloc[i[0]:i[1], ]
-            obi = data_slice.values.tolist()
-            obi2 = []
-            for a in obi:
-                if a:
-                    obi2.append(a)
+    for i in obs:
+        data_slice = full_data.iloc[i[0]:i[1], ]
+        observations.append(data_slice.values.tolist())
 
-            observations.append(obi2)
-        _round += 1
-        random.shuffle(observations)
-        with open(f'{file_out_nm}_{_round}.txt', 'w') as fp2:
-            json.dump(observations, fp2)
-
-        del full_data
-        del observations
+    random.shuffle(observations)
+    return observations
 
 
 def create_tokenized_obs(input_list, num_toks=500, offset=250):
@@ -151,7 +99,6 @@ def create_tokenized_obs(input_list, num_toks=500, offset=250):
     loop_end = -1
     appends = []
     for ix, i in enumerate(input_list):
-        # print(f'{ix:}')
         if ix == loop_end:
             start = -1
         if i['labels'][-1] == "U" and start == -1:
@@ -159,9 +106,54 @@ def create_tokenized_obs(input_list, num_toks=500, offset=250):
             end = ix + num_toks
             appends.append((start, end))
             loop_end = start + offset
-
+            
     return appends
+
+
+def load_datasets(dataset_paths):
+    """
+    Given a list of data paths returns a single data object containing all data slices
+    """
+    print('load datasets')
+    token_data = []
+    for d_set in dataset_paths:
+        with open(d_set, 'r') as fp:
+            data_slice = json.load(fp)
+        token_data.extend(data_slice)
+        del data_slice
+    return token_data
+
+def get_label_stats(dataset):
+    """
+    Generates frequency of different labels in the dataset.
+    """
+    print('get label stats')
+    calcs = {}
+    for i in dataset:
+        for tok in i:
+            if tok[2] not in calcs.keys():
+                calcs[tok[2]] = 1
+            else:
+                calcs[tok[2]] += 1
+    print(calcs)
+    return calcs
+
+def create_text_file(dataset, name, append=False):
+    """
+    Create Connl ner format file
+    """
+    if append:
+        mode = 'a'
+    else:
+        append = 'w'    
+    print('create text file')
+    with open(name, mode) as fp:
+        for obs in dataset:
+            for tok in obs:
+                line = tok[1] + " " + tok[2] + '\n'
+                fp.write(line)
+            fp.write('\n')
+
 
 if __name__ == "__main__":
     output_file_names = create_train_datasets()
-    print(f"Created following files: {output_file_names}")
