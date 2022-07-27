@@ -5,7 +5,6 @@ __author__ = "Daulet N."
 __email__ = "daulet.nurmanbetov@gmail.com"
 
 import logging
-from langdetect import detect
 from simpletransformers.ner import NERModel
 
 
@@ -17,24 +16,15 @@ class RestorePuncts:
         self.model = NERModel("bert", model, labels=self.valid_labels,
                               args={"silent": True, "max_seq_length": 512})
 
-    def punctuate(self, text: str, lang:str=''):
+    def punctuate(self, text: str):
         """
         Performs punctuation restoration on arbitrarily large text.
-        Detects if input is not English, if non-English was detected terminates predictions.
-        Overrride by supplying `lang='en'`
         
         Args:
             - text (str): Text to punctuate, can be few words to as large as you want.
-            - lang (str): Explicit language of input text.
         """
-        if not lang and len(text) > 10:
-            lang = detect(text)
-        if lang != 'en':
-            raise Exception(F"""Non English text detected. Restore Punctuation works only for English.
-            If you are certain the input is English, pass argument lang='en' to this function.
-            Punctuate received: {text}""")
 
-        # plit up large text into bert digestable chunks
+        # split up large text into bert digestable chunks
         splits = self.split_on_toks(text, self.wrds_per_pred, self.overlap_wrds)
         # predict slices
         # full_preds_lst contains tuple of labels and logits
