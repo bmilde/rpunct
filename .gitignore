@@ -1,4 +1,6 @@
 *.txt
 *.json
 *.csv
+*.egg*
 training/outputs
+*/__pycache__
