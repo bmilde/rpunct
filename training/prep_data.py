@@ -150,7 +150,8 @@ def create_text_file(dataset, name, append=False):
     with open(name, mode) as fp:
         for obs in dataset:
             for tok in obs:
-                line = tok[1] + " " + tok[2] + '\n'
+                word = tok[1].lower().replace('!', '').replace('.', '').replace(',', '').replace(':', '').replace(';', '').replace("'", '').replace('-', '').replace('?', '')
+                line = word + " " + tok[2] + '\n'
                 fp.write(line)
             fp.write('\n')
 
