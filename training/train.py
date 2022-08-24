@@ -17,9 +17,9 @@ def train_model():
     """
     Trains simpletransformers model
     """
-    print('Start training')
+    print('start training')
     # Create a NERModel
-    model = NERModel("bert", "dbmdz/bert-base-german-uncased",
+    model = NERModel("bert", "bert-base-cased",
                      args={"overwrite_output_dir": True,
                            "num_train_epochs": 3,
                            "max_seq_length": 512,
@@ -27,7 +27,7 @@ def train_model():
                      labels=VALID_LABELS)
 
     # # Train the model
-    steps, tr_details = model.train_model('rpunct_train_set.txt')
+    steps, tr_details = model.train_model('subs_token_trainset_full_en.txt')
     return steps, tr_details
 
 
